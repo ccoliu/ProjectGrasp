@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import tree_sitter_python
 from tree_sitter import Language, Node, Parser
 
-from grasp.model import MODULE_SCOPE, CallSite, Definition, FileResult
+from grasp.model import MODULE_SCOPE, CallSite, Definition, FileResult, Import
 from grasp.parsers.base import LanguageParser
 
 _LANGUAGE = Language(tree_sitter_python.language())
@@ -47,6 +47,7 @@ class PythonParser(LanguageParser):
         result = FileResult(path=path, language=self.language, has_errors=tree.root_node.has_error)
         _Extractor(source, result).run(tree.root_node)
         result.definitions.sort(key=lambda d: (d.line, d.column))
+        result.imports.sort(key=lambda i: i.line)
         result.calls.sort(key=lambda c: (c.line, c.column))
         return result
 
@@ -70,6 +71,12 @@ class _Extractor:
                     continue
             elif node.type == "call":
                 self._record_call(node, scope)
+            elif node.type == "import_statement":
+                self._record_import(node, scope)
+                continue
+            elif node.type == "import_from_statement":
+                self._record_from_import(node, scope)
+                continue
             stack.extend((child, scope) for child in node.named_children)
 
     def _define(self, node: Node, scope: _Scope) -> _Scope | None:
@@ -95,6 +102,7 @@ class _Extractor:
                 end_line=node.end_point.row + 1,
                 is_async=any(child.type == "async" for child in node.children),
                 decorators=_decorators(node),
+                bases=_bases(node),
             )
         )
         return inner
@@ -128,6 +136,35 @@ class _Extractor:
             )
         )
 
+    def _record_import(self, node: Node, scope: _Scope) -> None:
+        # import a.b, c as d
+        for item in node.children_by_field_name("name"):
+            target, alias = _split_alias(item)
+            self._add_import(node, scope, module=target, name=None, alias=alias, level=0)
+
+    def _record_from_import(self, node: Node, scope: _Scope) -> None:
+        # from ..a import b as c, d   /   from . import x   /   from a import *
+        module_node = node.child_by_field_name("module_name")
+        if module_node is None:
+            return
+        module, level = _text(module_node), 0
+        if module_node.type == "relative_import":
+            prefix = next((c for c in module_node.children if c.type == "import_prefix"), None)
+            level = len(_text(prefix)) if prefix is not None else 0
+            module = module[level:]
+        
+        if any(child.type == "wildcard_import" for child in node.children):
+            self._add_import(node, scope, module=module, name="*", alias=None, level=level)
+            return
+        for item in node.children_by_field_name("name"):
+            target, alias = _split_alias(item)
+            self._add_import(node, scope, module=module, name=target, alias=alias, level=level)
+
+    def _add_import(self, node: Node, scope: _Scope, **fields) -> None:
+        self._result.imports.append(
+            Import(scope=scope.qualname, line=node.start_point.row + 1, **fields)
+        )
+
     def _column(self, node: Node) -> int:
         # tree-sitter columns are byte offsets; convert to characters.
         start = node.start_byte
@@ -148,3 +185,18 @@ def _decorators(node: Node) -> tuple[str, ...]:
         for child in parent.named_children
         if child.type == "decorator" and child.named_children
     )
+
+def _bases(node: Node) -> tuple[str, ...]:
+    superclasses = node.child_by_field_name("superclasses")
+    if superclasses is None:
+        return ()
+    return tuple(
+        _text(child) for child in superclasses.named_children if child.type != "keyword_argument"
+    )
+
+def _split_alias(node: Node) -> tuple[str, str | None]:
+    if node.type == "aliased_import":
+        name = node.child_by_field_name("name")
+        alias = node.child_by_field_name("alias")
+        return _text(name), _text(alias) if alias is not None else None
+    return _text(node), None

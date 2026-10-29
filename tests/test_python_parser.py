@@ -173,6 +173,42 @@ def test_deep_nesting_does_not_overflow():
     assert len(result.calls) == 2000
 
 
+def test_imports():
+    result = parse(
+        """
+        import os
+        import a.b as c, d.e
+        from m import x as y, z
+        from ..pkg.sub import q
+        from . import r
+        from .mod import *
+        from __future__ import annotations
+
+        def f():
+            import json
+        """
+    )
+    got = [(i.scope, i.module, i.name, i.alias, i.level, i.bound_name) for i in result.imports]
+    assert got == [
+        (MODULE_SCOPE, "os", None, None, 0, "os"),
+        (MODULE_SCOPE, "a.b", None, "c", 0, "c"),
+        (MODULE_SCOPE, "d.e", None, None, 0, "d"),
+        (MODULE_SCOPE, "m", "x", "y", 0, "y"),
+        (MODULE_SCOPE, "m", "z", None, 0, "z"),
+        (MODULE_SCOPE, "pkg.sub", "q", None, 2, "q"),
+        (MODULE_SCOPE, "", "r", None, 1, "r"),
+        (MODULE_SCOPE, "mod", "*", None, 1, "*"),
+        ("f", "json", None, None, 0, "json"),
+    ]
+
+
+def test_class_bases():
+    result = parse("class K(Base, mod.Other, metaclass=Meta):\n    pass\n")
+    (k,) = result.definitions
+    assert k.bases == ("Base", "mod.Other")
+
+
+
 def test_parser_registry():
     assert isinstance(parser_for("pkg/mod.py"), PythonParser)
     assert parser_for("main.cpp") is None

@@ -17,6 +17,9 @@ CalleeKind = Literal["name", "attribute", "other"]
 
 @dataclass(frozen=True)
 class Definition:
+    """A function, method or class. `bases` lists a class's base class
+    expressions as source text, keyword arguments such as `metaclass=` excluded."""
+
     name: str
     qualname: str
     kind: DefinitionKind
@@ -26,6 +29,7 @@ class Definition:
     end_line: int
     is_async: bool = False
     decorators: tuple[str, ...] = ()
+    bases: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -46,6 +50,30 @@ class CallSite:
     line: int
     column: int
 
+@dataclass(frozen=True)
+class Import:
+    """One imported name and the scope it is bound in.
+
+    `import a.b` gives module="a.b", name=None; `from ..a import b as c` gives
+    module="a", name="b", alias="c", level=2. A wildcard import has name="*".
+    """ 
+
+    scope: str
+    module: str
+    name: str | None
+    alias: str | None
+    level: int
+    line: int
+
+    @property
+    def bound_name(self) -> str:
+        """The local name this import binds: `import a.b` binds `a`."""
+        if self.alias:
+            return self.alias
+        if self.name is not None:
+            return self.name
+        return self.module.split(".")[0]
+
 
 @dataclass
 class FileResult:
@@ -54,6 +82,7 @@ class FileResult:
     has_errors: bool = False
     definitions: list[Definition] = field(default_factory=list)
     calls: list[CallSite] = field(default_factory=list)
+    imports: list[Import] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
