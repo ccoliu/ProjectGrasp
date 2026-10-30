@@ -251,7 +251,7 @@ def test_skips_hidden_and_virtualenv_folders(tmp_path):
 def test_cli_graph(shop, capsys):
     assert main(["graph", str(shop), "--compact"]) == 0
     data = json.loads(capsys.readouterr().out)
-    assert set(data) == {"root", "nodes", "edges", "stats"}
+    assert set(data) == {"root", "nodes", "edges", "stats", "entry_points"}
     assert data["stats"]["files"] == 5
 
 

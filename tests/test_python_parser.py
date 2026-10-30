@@ -207,6 +207,28 @@ def test_class_bases():
     (k,) = result.definitions
     assert k.bases == ("Base", "mod.Other")
 
+def test_params_and_return_type():
+    result = parse(
+        """
+        def f(self, a, b: int, c=1, d: str = "x", *args, e, **kw) -> Token:
+            pass
+
+        def g(x, /, *, y: "Q" = None, *rest: int, **opts: Any):
+            pass
+        """
+    )
+    f, g = result.definitions
+    assert f.params == ("self", "a", "b: int", "c", "d: str", "*args", "e", "**kw")
+    assert f.returns == "Token"
+    assert g.params == ("x", 'y: "Q"', "*rest: int", "**opts: Any")
+    assert g.returns is None
+
+
+def test_main_guard():
+    assert parse("if __name__ == '__main__':\n    main()\n").has_main_guard
+    assert parse('if "__main__" == __name__:\n    main()\n').has_main_guard
+    assert not parse("if DEBUG:\n    main()\n").has_main_guard
+    assert not parse("def f():\n    if __name__ == '__main__':\n        pass\n").has_main_guard
 
 
 def test_parser_registry():

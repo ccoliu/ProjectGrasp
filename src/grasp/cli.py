@@ -3,11 +3,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import webbrowser
 from pathlib import Path
 
 from grasp import __version__
 from grasp.graph import build_graph
 from grasp.parsers import parser_for
+from grasp.viewer import render_html
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -23,9 +25,16 @@ def main(argv: list[str] | None = None) -> int:
     graph_cmd.add_argument("root", type=Path)
     graph_cmd.add_argument("--compact", action="store_true", help="print JSON on one line")
 
+    view_cmd = sub.add_parser("view", help="write an interactive call graph page (HTML)")
+    view_cmd.add_argument("root", type=Path)
+    view_cmd.add_argument("-o", "--output", type=Path, default=Path("grasp.html"), help="default: grasp.html")
+    view_cmd.add_argument("--open", action="store_true", help="open the page in a browser")
+
     args = ap.parse_args(argv)
     if args.command == "graph":
         return _graph(args.root, args.compact)
+    if args.command == "view":
+        return _view(args.root, args.output, args.open)
     return _parse(args.file, args.compact)
 
 
@@ -47,6 +56,18 @@ def _graph(root: Path, compact: bool) -> int:
         return 2
 
     _emit(build_graph(root).to_dict(), compact)
+    return 0
+
+def _view(root: Path, output: Path, open_browser: bool) -> int:
+    if not root.is_dir():
+        print(f"grasp: not a directory: {root}", file=sys.stderr)
+        return 2
+
+    graph = build_graph(root)
+    output.write_text(render_html(graph), encoding="utf-8")
+    print(f"wrote {output} ({len(graph.nodes)} nodes, {len(graph.edges)} edges)")
+    if open_browser:
+        webbrowser.open(output.resolve().as_uri())
     return 0
 
 def _emit(data: dict, compact: bool) -> None:

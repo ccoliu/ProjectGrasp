@@ -18,7 +18,9 @@ CalleeKind = Literal["name", "attribute", "other"]
 @dataclass(frozen=True)
 class Definition:
     """A function, method or class. `bases` lists a class's base class
-    expressions as source text, keyword arguments such as `metaclass=` excluded."""
+    expressions as source text, keyword arguments such as `metaclass=` excluded.
+    `params` holds each parameter as `name` or `name: type`, defaults dropped;
+    `returns` is the return annotation."""
 
     name: str
     qualname: str
@@ -30,6 +32,8 @@ class Definition:
     is_async: bool = False
     decorators: tuple[str, ...] = ()
     bases: tuple[str, ...] = ()
+    params: tuple[str, ...] = ()
+    returns: str | None = None 
 
 
 @dataclass(frozen=True)
@@ -83,6 +87,7 @@ class FileResult:
     definitions: list[Definition] = field(default_factory=list)
     calls: list[CallSite] = field(default_factory=list)
     imports: list[Import] = field(default_factory=list)
+    has_main_guard: bool = False # contains `if __name__ == "__main__":`
 
     def to_dict(self) -> dict:
         return asdict(self)

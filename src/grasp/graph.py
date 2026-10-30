@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from grasp.entries import EntryPoint, find_entry_points, is_test, project_scripts
 from grasp.model import MODULE_SCOPE, CallSite, Definition, FileResult, Import
 from grasp.parsers import PythonParser
 
@@ -34,6 +35,11 @@ class GraphNode:
     path: str
     line: int
     end_line: int
+    decorators: tuple[str, ...] = ()
+    params: tuple[str, ...] = ()
+    returns: str | None = None
+    is_test: bool = False
+    is_main: bool = False  # module code of a file that runs as a program
 
 @dataclass
 class GraphEdge:
@@ -61,6 +67,7 @@ class CallGraph:
     nodes: list[GraphNode]
     edges: list[GraphEdge]
     stats: Stats
+    entry_points: list[EntryPoint] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -80,7 +87,9 @@ def build_graph(root: str | Path) -> CallGraph:
         modules[name] = _Module(name, is_package, result, source.count(b"\n") + 1)
         stats.files += 1
         stats.files_with_errors += result.has_errors
-    return _Resolver(modules, stats).build(root)
+    graph = _Resolver(modules, stats).build(root)
+    graph.entry_points = find_entry_points(graph.nodes, graph.edges, project_scripts(root))
+    return graph
 
 def discover(root: Path) -> list[Path]:
     files: list[Path] = []
@@ -157,9 +166,17 @@ class _Resolver:
         edges: dict[tuple[str, str], GraphEdge] = {}
         for m in self._modules.values():
             path = m.result.path
-            nodes.append(GraphNode(m.node_id(MODULE_SCOPE), m.name, MODULE_SCOPE, "module", path, 1, m.line_count))
+            test = is_test(path)
+            runs_as_program = m.result.has_main_guard or m.name.split(".")[-1] == "__main__"
+            nodes.append(GraphNode(
+                m.node_id(MODULE_SCOPE), m.name, MODULE_SCOPE, "module", path, 1, m.line_count,
+                is_test=test, is_main=runs_as_program,
+            ))
             for d in m.result.definitions:
-                nodes.append(GraphNode(m.node_id(d.qualname), m.name, d.qualname, d.kind, path, d.line, d.end_line))
+                nodes.append(GraphNode(
+                    m.node_id(d.qualname), m.name, d.qualname, d.kind, path, d.line, d.end_line,
+                    decorators=d.decorators, params=d.params, returns=d.returns, is_test=test,
+                ))
         
             for call in m.result.calls:
                 outcome, targets = self._resolve_call(m, call)

@@ -77,6 +77,8 @@ class _Extractor:
             elif node.type == "import_from_statement":
                 self._record_from_import(node, scope)
                 continue
+            elif node.type == "if_statement" and scope is _MODULE and _is_main_guard(node):
+                self._result.has_main_guard = True
             stack.extend((child, scope) for child in node.named_children)
 
     def _define(self, node: Node, scope: _Scope) -> _Scope | None:
@@ -90,6 +92,7 @@ class _Extractor:
         else:
             kind = "method" if scope.kind == "class" else "function"
             inner = _Scope(qualname, "function")
+        returns = node.child_by_field_name("return_type")
 
         self._result.definitions.append(
             Definition(
@@ -103,6 +106,8 @@ class _Extractor:
                 is_async=any(child.type == "async" for child in node.children),
                 decorators=_decorators(node),
                 bases=_bases(node),
+                params=_params(node),
+                returns=_text(returns) if returns is not None else None,
             )
         )
         return inner
@@ -200,3 +205,24 @@ def _split_alias(node: Node) -> tuple[str, str | None]:
         alias = node.child_by_field_name("alias")
         return _text(name), _text(alias) if alias is not None else None
     return _text(node), None
+
+def _params(node: Node) -> tuple[str, ...]:
+    parameters = node.child_by_field_name("parameters")
+    if parameters is None:
+        return ()
+    params = []
+    for child in parameters.named_children:
+        if child.type in ("default_parameter", "typed_default_parameter"):
+            name = _text(child.child_by_field_name("name"))
+            annotation = child.child_by_field_name("type")
+            params.append(f"{name}: {_text(annotation)}" if annotation is not None else name)
+        elif child.type not in ("positional_separator", "keyword_separator"):
+            params.append(_text(child))
+    return tuple(params)
+
+def _is_main_guard(node: Node) -> bool:
+    condition = node.child_by_field_name("condition")
+    if condition is None:
+        return False
+    text = _text(condition).replace("'", '"').replace(" ", "")
+    return text in ('__name__=="__main__"', '"__main__"==__name__')
