@@ -21,6 +21,7 @@ def test_is_test():
     assert is_test("pkg/tests/helpers.py")
     assert is_test("conftest.py")
     assert is_test("pkg/api_test.py")
+    assert is_test("devel-common/src/tests_common/pytest_plugin.py")
     assert not is_test("pkg/testing.py")
     assert not is_test("app/api/tasks.py")
 

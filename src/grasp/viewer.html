@@ -21,6 +21,10 @@
             --group: #eef1f5;
             --selected: #e8453c;
             --mark: #fff3c4;
+            --callee: #7c4dff;
+            --callee-bg: #ebe5ff;
+            --caller: #0e9aa7;
+            --caller-bg: #d9f2f4;
             --code-keyword: #a626a4;
             --code-string: #50a14f;
             --code-number: #986801;
@@ -45,6 +49,10 @@
                 --group: #1f242d;
                 --selected: #ff6b61;
                 --mark: #3d3520;
+                --callee: #a98bff;
+                --callee-bg: #2f2850;
+                --caller: #3cc3cf;
+                --caller-bg: #1b3a3e;
                 --code-keyword: #d38cf0;
                 --code-string: #9ccf7a;
                 --code-number: #e3b56b;
@@ -428,6 +436,8 @@
                     <span><i style="background:var(--module)"></i>module code</span>
                     <span><i class="line"></i>certain call</span>
                     <span><i class="line dashed"></i>possible call</span>
+                    <span><i style="background:var(--callee)"></i>called by selection</span>
+                    <span><i style="background:var(--caller)"></i>calls selection</span>
                 </div>
             </section>
         </aside>
@@ -588,6 +598,12 @@
                         "text-background-padding": 2,
                     },
                 },
+                // Around a selected node: what it calls, what calls it, and everything else faded.
+                { selector: "node.callee", style: { "background-color": c("--callee-bg") } },
+                { selector: "node.caller", style: { "background-color": c("--caller-bg") } },
+                { selector: "edge.out", style: { "line-color": c("--callee"), "target-arrow-color": c("--callee"), "width": 2.5 } },
+                { selector: "edge.in", style: { "line-color": c("--caller"), "target-arrow-color": c("--caller"), "width": 2.5 } },
+                { selector: ".faded", style: { "opacity": 0.3 } },
                 { selector: "node:selected", style: { "border-color": c("--selected"), "border-width": 3 } },
                 { selector: "edge:selected", style: { "line-color": c("--selected"), "target-arrow-color": c("--selected"), "width": 2.5 } },
             ];
@@ -647,14 +663,22 @@
         }
 
         // Selects the current node or edge in the graph and labels the edges around it.
+        // A selected node also highlights its callers and callees and fades the rest.
         function markSelection() {
             cy.elements().unselect();
-            cy.edges().removeClass("labeled");
+            cy.elements().removeClass("labeled callee caller out in faded");
             const sel = state.selected;
             if (typeof sel === "string" && state.visible.has(sel)) {
                 const node = cy.getElementById(sel);
                 node.select();
-                node.connectedEdges().addClass("labeled");
+                const out = node.outgoers("edge");
+                const into = node.incomers("edge");
+                out.addClass("out labeled");
+                into.addClass("in labeled");
+                out.targets().addClass("callee");
+                into.sources().addClass("caller");
+                const near = node.union(out).union(into).union(out.targets()).union(into.sources());
+                cy.elements().not(":parent").difference(near).addClass("faded");
             } else if (sel && typeof sel === "object") {
                 cy.getElementById(`${sel.source}->${sel.target}`).select().addClass("labeled");
             }

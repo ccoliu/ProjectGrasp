@@ -37,7 +37,7 @@ class EntryPoint:
 
 def is_test(path: str) -> bool:
     p = PurePosixPath(path)
-    if any(part in ("tests", "test") for part in p.parts[:-1]):
+    if any(part.startswith("test") for part in p.parts[:-1]):  # tests/, testing/, tests_common/
         return True
     return p.name == "conftest.py" or p.name.startswith("test_") or p.stem.endswith("_test")
 
