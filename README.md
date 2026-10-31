@@ -17,8 +17,7 @@ uv run grasp graph path/to/project         # call graph as JSON
 uv run grasp parse path/to/module.py       # one file's definitions and calls as JSON
 ```
 
-In the page, pick an entry point or search for a function, then double-click nodes to expand what they call. Entry points are found from `[project.scripts]`, `if __name__ == "__main__"`, and framework decorators (web routes, Celery tasks, CLI commands); tests are hidden by default. Selecting a node shows its source, and the arrows around it are labelled with the callee's annotated parameter and return types. Solid edges are certain calls, dashed edges are possible ones. Add `#focus=<module>:<qualname>` to the URL to open on a given function. The page loads Cytoscape.js and highlight.js from a CDN, so it needs an internet connection. It also embeds the project's source code: share it only where the code itself may go.
-
+In the page, pick an entry point or search for a function, then double-click nodes to expand what they call. Entry points are found from `[project.scripts]`, `if __name__ == "__main__"`, and framework decorators (web routes, Celery tasks, CLI commands); tests are hidden by default. Selecting a node shows its source, and the arrows around it are labelled with the callee's annotated parameter and return types. Solid edges are certain calls, dashed edges are possible ones. Add `#focus=<module>:<qualname>` to the URL to open on a given function. The page loads Cytoscape.js and highlight.js from a CDN, so it needs an internet connection. It also embeds the project's source code: share it only where the code itself may go.s
 
 `grasp parse` prints JSON with three lists:
 
